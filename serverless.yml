@@ -9,6 +9,9 @@ provider:
   region: eu-west-1
   memorySize: 128
   timeout: 10
+  environment:
+    KAFKA_HOSTS: ${env:KAFKA_HOSTS}
+    SCHEMA_REGISTRY: ${env:SCHEMA_REGISTRY}
 
 custom:
   defaultStage: dev
@@ -30,10 +33,6 @@ package:
 functions:
   consumer:
     handler: api.consumer.consumer_handler
-
-    environment:
-      KAFKA_HOSTS: ${env:KAFKA_HOSTS}
-      SCHEMA_REGISTRY: ${env:SCHEMA_REGISTRY}
     events:
       - http:
           path: consume/{topic}
@@ -43,4 +42,10 @@ functions:
           method: get
       - http:
           path: consume/{topic}/partition/{partition}/offset/{offset}
+          method: get
+  copy:
+    handler: api.copy.copy_handler
+    events:
+      - http:
+          path: copy/{from_topic}/{to_topic}
           method: get
