@@ -1,0 +1,46 @@
+service: serverless-kafka
+plugins:
+  - serverless-python-requirements
+
+provider:
+  name: aws
+  profile: ${self:custom.profiles.${self:provider.stage}}
+  runtime: python3.6
+  region: eu-west-1
+  memorySize: 128
+  timeout: 10
+
+custom:
+  defaultStage: dev
+  profiles:
+    dev: nonprod
+    prod: prod
+
+package:
+  exclude:
+    - .git/**
+    - .idea/**
+    - .iml
+    - node_modules/**
+  include:
+    - service.cert
+    - service.key
+    - ca.pem
+
+functions:
+  consumer:
+    handler: api.consumer.consumer_handler
+
+    environment:
+      KAFKA_HOSTS: ${env:KAFKA_HOSTS}
+      SCHEMA_REGISTRY: ${env:SCHEMA_REGISTRY}
+    events:
+      - http:
+          path: consume/{topic}
+          method: get
+      - http:
+          path: consume/{topic}/partition/{partition}
+          method: get
+      - http:
+          path: consume/{topic}/partition/{partition}/offset/{offset}
+          method: get
