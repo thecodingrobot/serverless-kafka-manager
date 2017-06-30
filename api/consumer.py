@@ -1,4 +1,3 @@
-import json
 import logging
 import os
 import uuid
@@ -6,12 +5,13 @@ import uuid
 from confluent_kafka import KafkaError, TopicPartition
 from confluent_kafka.avro.serializer import SerializerError
 
-from api import kafka_consumer
+from api import kafka_consumer, formatter, lambda_response
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 
+@lambda_response
 def consumer_handler(event, context):
     topic = event['pathParameters']['topic']
 
@@ -19,7 +19,6 @@ def consumer_handler(event, context):
         event['queryStringParameters'] = {}
 
     group_id = event['queryStringParameters'].get('groupId', str(uuid.uuid1()))
-    is_raw = 'raw' in event['queryStringParameters']
 
     logger.info('Topic: {} Group id {}'.format(topic, group_id))
 
@@ -27,10 +26,18 @@ def consumer_handler(event, context):
         'metadata.broker.list': os.environ['KAFKA_HOSTS'],
         'group.id': group_id,
     }
-    if not is_raw:
-        settings['schema.registry.url'] = os.environ['SCHEMA_REGISTRY']
 
-    with kafka_consumer(settings, is_raw) as consumer:
+    is_avro = False
+    if 'hex' in event['queryStringParameters']:
+        msg_formatter = formatter.HexdumpFormatter(settings)
+    elif 'json' in event['queryStringParameters']:
+        settings['schema.registry.url'] = os.environ['SCHEMA_REGISTRY']
+        is_avro = True
+        msg_formatter = formatter.JsonFormatter(settings)
+    else:
+        msg_formatter = formatter.RawFormatter(settings)
+
+    with kafka_consumer(settings, is_avro) as consumer:
         if 'partition' in event['pathParameters']:
             options = {
                 'topic': topic,
@@ -44,10 +51,23 @@ def consumer_handler(event, context):
             consumer.subscribe([topic])
 
         try:
-            while context.get_remaining_time_in_millis() < 1500:
+            while context.get_remaining_time_in_millis() > 1500:
                 msg = consumer.poll(timeout=1.0)
                 if msg:
-                    return process_msg(msg, settings, is_raw)
+                    if not msg.error():
+                        return msg_formatter.format_message(msg)
+                    elif msg.error().code() == KafkaError._PARTITION_EOF:
+                        return {
+                            'statusCode': 204,
+                            'body': "Topic {} [{}] reached end at offset {}".format(msg.topic(), msg.partition(),
+                                                                                    msg.offset())
+                        }
+                    else:
+                        logger.error('Unhandled kafka error: {}. Settings: {}'.format(msg.error(), settings))
+                        return {
+                            'statusCode': 204,
+                            'body': 'Unhandled kafka error: {}'.format(msg.error())
+                        }
 
             return {
                 'statusCode': 204,
@@ -56,53 +76,5 @@ def consumer_handler(event, context):
         except SerializerError as e:
             return {
                 'statusCode': 400,
-                'body': "Message deserialization failed for {}: {}".format(msg, e)
+                'body': "Message deserialization failed. Reason: {}".format(e)
             }
-
-
-def process_msg(msg, settings, is_raw=True):
-    if not msg.error():
-        msg_metadata = {'topic': msg.topic(),
-                        'group_id': settings['group.id'],
-                        'offset': msg.offset(),
-                        'partition': msg.partition(),
-                        'key': msg.key()
-                        }
-        if is_raw:
-            from hexdump import hexdump
-            msg_metadata['payload'] = hexdump(msg.value(), result='return')
-            return {
-                'statusCode': 200,
-                'headers': {'content-type': 'text/plain'},
-                'body': (("Metadata:\n"
-                          "Topic:     {m[topic]}\n"
-                          "Group ID:  {m[group_id]}\n"
-                          "Offset:    {m[offset]}\n"
-                          "Partition: {m[partition]}\n"
-                          "Key:       {m[key]}\n"
-                          "\n"
-                          "Message:\n"
-                          "{m[payload]}\n"
-                          ).format(m=msg_metadata))
-            }
-        else:
-            def default_decoder(obj):
-                return obj.decode('utf-8')
-
-            msg_metadata['payload'] = msg.value()
-            return {
-                'statusCode': 200,
-                'body': json.dumps(msg_metadata, default=default_decoder)
-            }
-    elif msg.error().code() == KafkaError._PARTITION_EOF:
-        return {
-            'statusCode': 204,
-            'body': "Topic {} [{}] reached end at offset {}".format(msg.topic(), msg.partition(),
-                                                                    msg.offset())
-        }
-    else:
-        logger.error('Unhandled kafka error: {}. Settings: {}'.format(msg.error(), settings))
-        return {
-            'statusCode': 204,
-            'body': 'Unhandled kafka error: {}'.format(msg.error())
-        }
