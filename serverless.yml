@@ -48,4 +48,4 @@ functions:
     events:
       - http:
           path: copy/{from_topic}/{to_topic}
-          method: get
+          method: post
