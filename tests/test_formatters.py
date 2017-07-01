@@ -41,14 +41,14 @@ def test_raw_formatter_binary_payload():
     settings = {
         'opt1': 1
     }
-    payload = bytes([0x6c, 0x69, 0x62, 0x6c, 0x7a, 0x34, 0x2e, 0x73, 0x6f])
+    payload = bytes([0x6c, 0x69, 0x62, 0x6c, 0x7a, 0x34, 0x2e, 0x73, 0x6f, 0xa0])
 
     f = formatters.RawFormatter(settings)
     result = f.format_message(DummyMessage(payload))
     assert result == {
         'statusCode': 200,
         'headers': {'content-type': 'text/plain'},
-        'body': 'liblz4.so'
+        'body': 'liblz4.so\udca0'
     }
 
 

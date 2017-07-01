@@ -15,7 +15,7 @@ class RawFormatter(AbstractFormatter):
         return {
             'statusCode': 200,
             'headers': {'content-type': 'text/plain'},
-            'body': msg.value().decode('utf-8')
+            'body': msg.value().decode('ascii',  'surrogateescape')
         }
 
 
