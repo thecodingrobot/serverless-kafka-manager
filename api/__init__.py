@@ -24,20 +24,21 @@ def lambda_response(func):
 
 
 @contextmanager
-def kafka_consumer(settings, avro=False):
+def kafka_consumer(settings, avro=False, use_ssl=False) -> Consumer:
     def error_callback(er):
         logger.error(er)
 
     config = {'error_cb': error_callback,
-              # 'security.protocol': 'ssl',
-              # 'ssl.key.location': 'service.key',
-              # 'ssl.certificate.location': 'service.cert',
-              # 'ssl.ca.location': 'ca.pem',
               'api.version.request': True,
               'default.topic.config': {'auto.offset.reset': 'smallest'}
               }
-
     config.update(settings)
+
+    if use_ssl:
+        config.update({'security.protocol': 'ssl',
+                       'ssl.key.location': 'service.key',
+                       'ssl.certificate.location': 'service.cert',
+                       'ssl.ca.location': 'ca.pem'})
 
     if 'group.id' not in config:
         config['group.id'] = uuid.uuid4()
@@ -53,14 +54,16 @@ def kafka_consumer(settings, avro=False):
 
 
 @contextmanager
-def kafka_producer(settings: dict) -> Producer:
+def kafka_producer(settings: dict, use_ssl=False) -> Producer:
     config = {
-        # 'security.protocol': 'ssl',
-        # 'ssl.key.location': 'service.key',
-        # 'ssl.certificate.location': 'service.cert',
-        # 'ssl.ca.location': 'ca.pem',
         'api.version.request': True,
     }
+
+    if use_ssl:
+        config.update({'security.protocol': 'ssl',
+                       'ssl.key.location': 'service.key',
+                       'ssl.certificate.location': 'service.cert',
+                       'ssl.ca.location': 'ca.pem'})
 
     config.update(settings)
     producer = Producer(config)

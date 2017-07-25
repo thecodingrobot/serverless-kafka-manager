@@ -37,7 +37,9 @@ def consumer_handler(event, context):
     else:
         msg_formatter = formatter.RawFormatter(settings)
 
-    with kafka_consumer(settings, is_avro) as consumer:
+    kafka_use_ssl = 'True' == os.environ.get('KAFKA_USE_SSL', 'False')
+
+    with kafka_consumer(settings, is_avro, kafka_use_ssl) as consumer:
         if 'partition' in event['pathParameters']:
             options = {
                 'topic': topic,

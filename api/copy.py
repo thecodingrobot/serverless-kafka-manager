@@ -10,9 +10,10 @@ def copy_handler(event, context):
     settings = {
         'bootstrap.servers': os.environ['KAFKA_HOSTS'],
     }
+    kafka_use_ssl = 'True' == os.environ.get('KAFKA_USE_SSL', 'False')
 
     copied_messages = 0
-    with kafka_producer(settings) as p, kafka_consumer(settings) as c:
+    with kafka_producer(settings, kafka_use_ssl) as p, kafka_consumer(settings, kafka_use_ssl) as c:
         c.subscribe([from_topic])
         while context.get_remaining_time_in_millis() > 1500:
             msg = c.poll(timeout=1.0)
