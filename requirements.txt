@@ -4,5 +4,5 @@ chardet==3.0.4
 confluent-kafka==0.9.4
 idna==2.5
 requests==2.18.1
-urllib3==1.21.1
+urllib3==1.24.2
 hexdump==3.3
